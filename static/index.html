@@ -35,6 +35,7 @@ var W = canvas.width  = window.innerWidth-6;
 var H = canvas.height = window.innerHeight-50;
 var wscounter = 0;
 var socket;
+var colors=['aqua', 'pink', 'yellow'];
 
 function debug(str) {
     var debugDiv = document.getElementById('debug');
@@ -44,18 +45,46 @@ debug("Test");
 
 world = {};
 
+
+function sendJSONXMLHTTPRequest(url, objects, callback) {
+    var xhr = new XMLHttpRequest();
+    xhr.onreadystatechange = function () {
+        if (xhr.readyState==4) { //4=DONE
+            try {
+                if (xhr.status==200) {
+                    // console.log("xhr.responseText = "+xhr.responseText);
+                    //XXX: parse some JSON from the request!
+                    var response = JSON.parse(xhr.responseText);
+                    //XXX: Pass the data to the callback!
+                    callback(response);
+                }
+            } 
+            catch(e) {
+                alert('Error: ' + e.name);
+            }
+        }
+    };
+    //XXX: POST to a URL
+    xhr.open("POST", url, true);
+    //XXX: set the mimetype and the accept headers!
+    // Remember to use application/json !
+    xhr.setRequestHeader("Content-Type", "application/json");
+    xhr.setRequestHeader("Accept", "application/json");
+    xhr.send(JSON.stringify(objects));
+}
+
 //XXX: TODO Make this prettier!
 function drawCircle(context,entity) {
     with(context) {
-        beginPath();                
-        lineWidth = 3;
+        beginPath();              
+        lineWidth = 20;
         var x = entity["x"];
         var y = entity["y"];
         //moveTo(x,y);
         fillStyle = entity["colour"];
         strokeStyle = fillStyle;
-        arc(x, y, (entity["radius"])?entity["radius"]:50, 0, 2.0 * Math.PI, false);  
-        stroke();                                
+        arc(x, y, (entity["radius"])?entity["radius"]:10, 0, 2.0 * Math.PI, false);  
+        stroke();                               
     }
 }
 
@@ -64,7 +93,7 @@ function prepEntity(entity) {
         entity["colour"] = "#FF0000";
     }
     if (!entity["radius"]) {
-        entity["radius"] = 50;
+        entity["radius"] = 10;
     }
     return entity;
 }
@@ -125,6 +154,7 @@ function addEntity(entity, data) {
     world[entity] = data;
     drawNextFrame(); // (but should we?)
     //XXX: Send a XHTML Request that updates the entity you just modified!
+    sendJSONXMLHTTPRequest(document.location.origin + "/entity/" + entity, data, function(stuff){});
 }
 var counter = 0;
 function addEntityWithoutName(data) {
@@ -230,18 +260,24 @@ mouse = (function() {
 
 // Add the application specific mouse listeners!
 //XXX: TODO Make these prettier!
+
 mouse.mousedowners.push(function(x,y,clicked,e) {
-    addEntityWithoutName({'x':x,'y':y,'colour':'blue'});
+    var randColor = colors[Math.floor(Math.random() * colors.length)];
+    addEntityWithoutName({'x':x,'y':y,'colour':randColor});
 });
 
 mouse.mouseuppers.push(function(x,y,clicked,e) {
-    addEntityWithoutName({'x':x,'y':y,'colour':'red'});
+    var randColor = colors[Math.floor(Math.random() * colors.length)];
+    addEntityWithoutName({'x':x,'y':y,'colour':randColor});
 });
 
 mouse.mousedraggers.push(function(x,y,clicked,e) {
-    addEntityWithoutName({'x':x,'y':y,'colour':'green',
+    var randColor = colors[Math.floor(Math.random() * colors.length)];
+    addEntityWithoutName({'x':x,'y':y,'colour':randColor,
                           'radius':10});
 });
+
+
 
 
 function update() {
@@ -254,6 +290,9 @@ function wsSetup() {
     socket = new WebSocket(url);
     socket.onopen = function() {
         //XXX: TODO What are you going to do here?
+        //draw world
+        drawNextFrame();
+        //console.log("world"+JSON.stringify(world));
     };
     socket.onerror = function(msg) {
         debug("WebSocket Error:" + msg.data);
@@ -261,7 +300,15 @@ function wsSetup() {
     socket.onmessage = function(msg) {  
         try {
             debug("WebSocket Recv:" + msg.data);
-            //XXX: TODO What are you going to do here?            
+            //XXX: TODO What are you going to do here? 
+            //when socket receives message(an entity), parse it and add to world
+            parsed_msg = JSON.parse(msg.data);
+            entity = Object.keys(parsed_msg)[0];
+            data = Object.values(parsed_msg)[0];
+            world[entity] = data;
+            //redraw world
+            drawNextFrame();
+
         } catch (e) {
             alert("socket on message: " + e);
         }
